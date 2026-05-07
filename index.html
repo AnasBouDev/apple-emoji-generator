@@ -43,7 +43,6 @@
             overflow-x: hidden;
         }
 
-        /* Ambient background */
         body::before {
             content: '';
             position: fixed;
@@ -71,7 +70,6 @@
             padding: 48px 24px 80px;
         }
 
-        /* Header */
         header {
             text-align: center;
             margin-bottom: 40px;
@@ -107,7 +105,6 @@
             line-height: 1.5;
         }
 
-        /* Card */
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -127,7 +124,6 @@
             margin-bottom: 12px;
         }
 
-        /* Textarea */
         #textInput {
             width: 100%;
             min-height: 130px;
@@ -149,7 +145,6 @@
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
-        /* Settings */
         .settings-row {
             display: flex;
             gap: 16px;
@@ -193,7 +188,6 @@
             font-weight: 500;
         }
 
-        /* Preview */
         #preview {
             min-height: 60px;
             padding: 16px;
@@ -215,7 +209,6 @@
             font-style: italic;
         }
 
-        /* Buttons */
         .btn-row {
             display: flex;
             gap: 12px;
@@ -262,7 +255,6 @@
             transform: none !important;
         }
 
-        /* Output area */
         #outputArea {
             display: none;
             text-align: center;
@@ -274,7 +266,6 @@
             border-radius: var(--radius-sm);
             overflow: hidden;
             max-width: 100%;
-            /* Checkerboard background to show transparency */
             background-image:
                 linear-gradient(45deg, #222 25%, transparent 25%),
                 linear-gradient(-45deg, #222 25%, transparent 25%),
@@ -301,7 +292,6 @@
         }
         .download-link:hover { color: #fff; }
 
-        /* Toast */
         .toast {
             position: fixed;
             bottom: 32px;
@@ -325,7 +315,6 @@
         .toast.success { background: rgba(34,197,94,0.85); }
         .toast.error { background: rgba(239,68,68,0.85); }
 
-        /* Loading overlay */
         .loading-overlay {
             display: none;
             position: fixed;
@@ -366,13 +355,11 @@
         <p>Type text with emojis, see them rendered in Apple style, and export as a transparent PNG.</p>
     </header>
 
-    <!-- Input -->
     <div class="card" id="inputCard">
         <div class="card-label">Input</div>
         <textarea id="textInput" placeholder="Type your text with emojis here 😊🎉🚀&#10;Line breaks are preserved!"></textarea>
     </div>
 
-    <!-- Settings -->
     <div class="card">
         <div class="card-label">Settings</div>
         <div class="settings-row">
@@ -398,13 +385,11 @@
         </div>
     </div>
 
-    <!-- Preview -->
     <div class="card">
         <div class="card-label">Live Preview</div>
         <div id="preview"><span class="preview-empty">Your preview will appear here…</span></div>
     </div>
 
-    <!-- Actions -->
     <div class="card">
         <div class="btn-row">
             <button class="btn btn-primary" id="btnGenerate" onclick="generatePNG()">
@@ -418,7 +403,6 @@
         </div>
     </div>
 
-    <!-- Output -->
     <div class="card" id="outputArea">
         <div class="card-label">Result (transparent PNG)</div>
         <div class="canvas-wrapper">
@@ -431,40 +415,33 @@
     </div>
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- Loading overlay -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="spinner"></div>
     <div class="loading-text" id="loadingText">Loading emoji images…</div>
 </div>
 
 <script>
-// ── Emoji Regex ──
-// Matches flags, keycaps, and extended pictographic with modifiers/ZWJ sequences.
 const EMOJI_RE = /\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\p{Emoji_Modifier}|\uFE0F)?(?:\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\p{Emoji_Modifier}|\uFE0F)?)*/gu;
-
 const CDN_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/';
-const imageCache = new Map(); // emoji string → HTMLImageElement | null
+const imageCache = new Map();
 
-// ── DOM refs ──
-const textInput   = document.getElementById('textInput');
-const preview     = document.getElementById('preview');
-const fontSizeEl  = document.getElementById('fontSize');
+const textInput = document.getElementById('textInput');
+const preview = document.getElementById('preview');
+const fontSizeEl = document.getElementById('fontSize');
 const fontSizeVal = document.getElementById('fontSizeVal');
 const textColorEl = document.getElementById('textColor');
-const maxWidthEl  = document.getElementById('maxWidth');
-const canvas      = document.getElementById('outputCanvas');
-const ctx         = canvas.getContext('2d');
-const outputArea  = document.getElementById('outputArea');
-const btnCopy     = document.getElementById('btnCopy');
-const dlLink      = document.getElementById('downloadLink');
-const toast       = document.getElementById('toast');
-const overlay     = document.getElementById('loadingOverlay');
+const maxWidthEl = document.getElementById('maxWidth');
+const canvas = document.getElementById('outputCanvas');
+const ctx = canvas.getContext('2d');
+const outputArea = document.getElementById('outputArea');
+const btnCopy = document.getElementById('btnCopy');
+const dlLink = document.getElementById('downloadLink');
+const toast = document.getElementById('toast');
+const overlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
 
-// ── Settings ──
 fontSizeEl.addEventListener('input', () => {
     fontSizeVal.textContent = fontSizeEl.value + 'px';
     updatePreview();
@@ -473,11 +450,9 @@ textColorEl.addEventListener('input', updatePreview);
 maxWidthEl.addEventListener('change', updatePreview);
 textInput.addEventListener('input', updatePreview);
 
-// ── Parse text into segments ──
 function parseSegments(text) {
     const segments = [];
     let last = 0;
-    // Reset regex
     EMOJI_RE.lastIndex = 0;
     let m;
     while ((m = EMOJI_RE.exec(text)) !== null) {
@@ -493,12 +468,10 @@ function parseSegments(text) {
     return segments;
 }
 
-// ── Codepoints → CDN filename ──
 function emojiToUrls(emoji) {
     const cps = [...emoji].map(c => c.codePointAt(0).toString(16).toLowerCase());
     const withFE0F = cps.join('-');
     const withoutFE0F = cps.filter(c => c !== 'fe0f').join('-');
-    // Also try without ZWJ (200d) for some edge cases
     const withoutZWJ = cps.filter(c => c !== 'fe0f' && c !== '200d').join('-');
     const urls = new Set();
     urls.add(CDN_BASE + withoutFE0F + '.png');
@@ -507,7 +480,6 @@ function emojiToUrls(emoji) {
     return [...urls];
 }
 
-// ── Load single image ──
 function loadImg(url) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -518,7 +490,6 @@ function loadImg(url) {
     });
 }
 
-// ── Load emoji image with fallback ──
 async function loadEmojiImage(emoji) {
     if (imageCache.has(emoji)) return imageCache.get(emoji);
     const urls = emojiToUrls(emoji);
@@ -527,18 +498,18 @@ async function loadEmojiImage(emoji) {
             const img = await loadImg(url);
             imageCache.set(emoji, img);
             return img;
-        } catch { /* try next */ }
+        } catch { }
     }
     imageCache.set(emoji, null);
     return null;
 }
 
-// ── Live preview ──
 let previewDebounce = null;
 function updatePreview() {
     clearTimeout(previewDebounce);
     previewDebounce = setTimeout(_doPreview, 120);
 }
+
 async function _doPreview() {
     const text = textInput.value;
     if (!text.trim()) {
@@ -548,10 +519,8 @@ async function _doPreview() {
     const size = parseInt(fontSizeEl.value);
     const segments = parseSegments(text);
     let html = '';
-    const loads = [];
     for (const seg of segments) {
         if (seg.type === 'text') {
-            // Escape HTML and preserve newlines
             html += escapeHtml(seg.value).replace(/\n/g, '<br>');
         } else {
             const urls = emojiToUrls(seg.value);
@@ -567,30 +536,29 @@ async function _doPreview() {
     preview.style.color = textColorEl.value;
     preview.style.maxWidth = maxWidthEl.value === '9999' ? 'none' : maxWidthEl.value + 'px';
 }
+
 function escapeHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
 function escapeAttr(s) {
     return s.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
 }
-// Called on img error in preview
+
 window.emojiImgError = function(img, fallbackUrl, fallbackChar) {
     if (fallbackUrl && img.src !== fallbackUrl) {
         img.src = fallbackUrl;
     } else {
-        // Replace with the Unicode character
         const span = document.createElement('span');
         span.textContent = fallbackChar;
         img.replaceWith(span);
     }
 };
 
-// ── Font loading helper ──
 let fontLoaded = false;
 async function ensureFontLoaded() {
     if (fontLoaded) return;
     try {
-        // Use FontFace API to explicitly load the font into memory
         const fontFace = new FontFace(
             'TikTok Sans',
             "url('TikTok_Sans/TikTokSans-VariableFont_opsz,slnt,wdth,wght.ttf')"
@@ -600,19 +568,16 @@ async function ensureFontLoaded() {
         await document.fonts.ready;
         fontLoaded = true;
     } catch(e) {
-        console.warn('FontFace load failed, falling back:', e);
+        console.warn(e);
     }
 }
 
-// Preload font on page load so it's ready when needed
 ensureFontLoaded();
 
-// ── Generate PNG ──
 const FONT_FAMILY = 'TikTok Sans';
 const FONT_FALLBACK = 'sans-serif';
 
 function getFontString(fontSize) {
-    // Check if TikTok Sans is actually available
     if (document.fonts.check(`${fontSize}px "${FONT_FAMILY}"`)) {
         return `${fontSize}px "${FONT_FAMILY}", ${FONT_FALLBACK}`;
     }
@@ -628,7 +593,6 @@ async function generatePNG() {
     }
     showLoading(true, 'Loading font…');
     try {
-        // Ensure font is loaded before canvas operations
         await ensureFontLoaded();
 
         showLoading(true, 'Parsing text…');
@@ -640,20 +604,16 @@ async function generatePNG() {
         const padding = 12;
         const fontStr = getFontString(fontSize);
 
-        // Parse lines
         const rawLines = text.split('\n');
-        const allLines = []; // each = array of segments
+        const allLines = [];
 
-        // Set up temp canvas for measurement
         const mCanvas = document.createElement('canvas');
         const mCtx = mCanvas.getContext('2d');
         mCtx.font = fontStr;
 
-        // Word-wrap each line
         for (const rawLine of rawLines) {
             const segs = parseSegments(rawLine);
             if (segs.length === 0) { allLines.push([]); continue; }
-            // Tokenize: split text segments by spaces to enable wrapping
             const tokens = [];
             for (const seg of segs) {
                 if (seg.type === 'emoji') { tokens.push(seg); }
@@ -664,7 +624,6 @@ async function generatePNG() {
                     }
                 }
             }
-            // Wrap
             let currentLine = [];
             let currentWidth = 0;
             for (const tok of tokens) {
@@ -681,7 +640,6 @@ async function generatePNG() {
             allLines.push(currentLine);
         }
 
-        // Preload emoji images
         showLoading(true, 'Loading emoji images…');
         const emojiSet = new Set();
         for (const line of allLines) {
@@ -691,7 +649,6 @@ async function generatePNG() {
         }
         await Promise.all([...emojiSet].map(e => loadEmojiImage(e)));
 
-        // Calculate canvas dimensions
         let canvasWidth = 0;
         for (const line of allLines) {
             let lw = 0;
@@ -701,12 +658,9 @@ async function generatePNG() {
         canvasWidth = Math.max(Math.ceil(canvasWidth + padding * 2), 1);
         const canvasHeight = Math.max(Math.ceil(allLines.length * lineHeight + padding * 2), 1);
 
-        // Draw on canvas
         showLoading(true, 'Rendering…');
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
-        // IMPORTANT: Setting canvas.width/height resets ALL context state,
-        // so font, fillStyle, textBaseline must be set AFTER resize.
         ctx.font = fontStr;
         ctx.fillStyle = textColor;
         ctx.textBaseline = 'top';
@@ -726,7 +680,6 @@ async function generatePNG() {
                     if (img) {
                         ctx.drawImage(img, x, emojiY, emojiSize, emojiSize);
                     } else {
-                        // Fallback: draw raw unicode character
                         ctx.fillText(seg.value, x, textY);
                     }
                     x += seg.width;
@@ -734,7 +687,6 @@ async function generatePNG() {
             }
         }
 
-        // Export blob
         lastBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
         dlLink.href = URL.createObjectURL(lastBlob);
         outputArea.classList.add('visible');
@@ -748,7 +700,6 @@ async function generatePNG() {
     }
 }
 
-// ── Copy PNG ──
 async function copyPNG() {
     if (!lastBlob) { showToast('Generate a PNG first', 'error'); return; }
     try {
@@ -762,13 +713,13 @@ async function copyPNG() {
     }
 }
 
-// ── Helpers ──
 function showToast(msg, type) {
     toast.textContent = msg;
     toast.className = 'toast ' + type + ' show';
     clearTimeout(toast._t);
     toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
 }
+
 function showLoading(on, msg) {
     if (on) {
         overlay.classList.add('active');
@@ -778,7 +729,6 @@ function showLoading(on, msg) {
     }
 }
 
-// Init preview on load
 updatePreview();
 </script>
 </body>
