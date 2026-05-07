@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Emoji PNG Renderer</title>
+    <meta name="description" content="Convert text with emojis to Apple-style emoji images and export as transparent PNG">
+    <style>
+        @font-face {
+            font-family: 'TikTok Sans';
+            src: url('TikTok_Sans/TikTokSans-VariableFont_opsz,slnt,wdth,wght.ttf') format('truetype');
+            font-weight: 100 900;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #18181b;
+            --bg-card: rgba(255,255,255,0.04);
+            --bg-card-hover: rgba(255,255,255,0.07);
+            --border: rgba(255,255,255,0.08);
+            --border-focus: rgba(139,92,246,0.5);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent: #8b5cf6;
+            --accent-light: #a78bfa;
+            --accent-glow: rgba(139,92,246,0.25);
+            --success: #22c55e;
+            --error: #ef4444;
+            --radius: 14px;
+            --radius-sm: 10px;
+        }
+
+        body {
+            font-family: 'TikTok Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -40%; left: -20%;
+            width: 80vw; height: 80vw;
+            background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -30%; right: -10%;
+            width: 60vw; height: 60vw;
+            background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 48px 24px 80px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        header .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent-light);
+            margin-bottom: 16px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 30%, var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        header p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.3s;
+        }
+        .card:hover { border-color: rgba(255,255,255,0.12); }
+        .card-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        /* Textarea */
+        #textInput {
+            width: 100%;
+            min-height: 130px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 16px;
+            line-height: 1.65;
+            padding: 16px;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+        #textInput::placeholder { color: var(--text-muted); }
+        #textInput:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* Settings */
+        .settings-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .setting input[type="range"] {
+            width: 100px;
+            accent-color: var(--accent);
+        }
+        .setting input[type="color"] {
+            width: 32px; height: 28px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            padding: 2px;
+        }
+        .setting select {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+        }
+        .font-size-value {
+            min-width: 32px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Preview */
+        #preview {
+            min-height: 60px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            line-height: 1.7;
+            font-size: 16px;
+            word-break: break-word;
+            color: var(--text-primary);
+        }
+        #preview .emoji-img {
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0 1px;
+        }
+        .preview-empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #6d28d9);
+            color: #fff;
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(255,255,255,0.15);
+        }
+        .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Output area */
+        #outputArea {
+            display: none;
+            text-align: center;
+        }
+        #outputArea.visible { display: block; }
+        .canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            max-width: 100%;
+            /* Checkerboard background to show transparency */
+            background-image:
+                linear-gradient(45deg, #222 25%, transparent 25%),
+                linear-gradient(-45deg, #222 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #222 75%),
+                linear-gradient(-45deg, transparent 75%, #222 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        }
+        .canvas-wrapper canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 14px;
+            color: var(--accent-light);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .download-link:hover { color: #fff; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            padding: 12px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { background: rgba(34,197,94,0.85); }
+        .toast.error { background: rgba(239,68,68,0.85); }
+
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .loading-overlay.active { display: flex; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.15);
+            border-top-color: var(--accent-light);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: var(--text-secondary); font-size: 14px; }
+
+        @media (max-width: 600px) {
+            .container { padding: 28px 14px 60px; }
+            header h1 { font-size: 24px; }
+            .settings-row { gap: 10px; }
+            .btn { padding: 10px 16px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="badge">🍎 Apple Emoji Renderer</div>
+        <h1>Emoji → PNG Converter</h1>
+        <p>Type text with emojis, see them rendered in Apple style, and export as a transparent PNG.</p>
+    </header>
+
+    <!-- Input -->
+    <div class="card" id="inputCard">
+        <div class="card-label">Input</div>
+        <textarea id="textInput" placeholder="Type your text with emojis here 😊🎉🚀&#10;Line breaks are preserved!"></textarea>
+    </div>
+
+    <!-- Settings -->
+    <div class="card">
+        <div class="card-label">Settings</div>
+        <div class="settings-row">
+            <div class="setting">
+                <label for="fontSize">Size</label>
+                <input type="range" id="fontSize" min="14" max="72" value="28">
+                <span class="font-size-value" id="fontSizeVal">28px</span>
+            </div>
+            <div class="setting">
+                <label for="textColor">Color</label>
+                <input type="color" id="textColor" value="#ffffff">
+            </div>
+            <div class="setting">
+                <label for="maxWidth">Width</label>
+                <select id="maxWidth">
+                    <option value="400">400px</option>
+                    <option value="600" selected>600px</option>
+                    <option value="800">800px</option>
+                    <option value="1200">1200px</option>
+                    <option value="9999">No limit</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card">
+        <div class="card-label">Live Preview</div>
+        <div id="preview"><span class="preview-empty">Your preview will appear here…</span></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="btn-row">
+            <button class="btn btn-primary" id="btnGenerate" onclick="generatePNG()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Generate PNG
+            </button>
+            <button class="btn btn-secondary" id="btnCopy" onclick="copyPNG()" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copy PNG
+            </button>
+        </div>
+    </div>
+
+    <!-- Output -->
+    <div class="card" id="outputArea">
+        <div class="card-label">Result (transparent PNG)</div>
+        <div class="canvas-wrapper">
+            <canvas id="outputCanvas"></canvas>
+        </div>
+        <a id="downloadLink" class="download-link" download="emoji-text.png">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download PNG
+        </a>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Loading emoji images…</div>
+</div>
+
+<script>
+// ── Emoji Regex ──
+// Matches flags, keycaps, and extended pictographic with modifiers/ZWJ sequences.
+const EMOJI_RE = /\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\p{Emoji_Modifier}|\uFE0F)?(?:\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\p{Emoji_Modifier}|\uFE0F)?)*/gu;
+
+const CDN_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/';
+const imageCache = new Map(); // emoji string → HTMLImageElement | null
+
+// ── DOM refs ──
+const textInput   = document.getElementById('textInput');
+const preview     = document.getElementById('preview');
+const fontSizeEl  = document.getElementById('fontSize');
+const fontSizeVal = document.getElementById('fontSizeVal');
+const textColorEl = document.getElementById('textColor');
+const maxWidthEl  = document.getElementById('maxWidth');
+const canvas      = document.getElementById('outputCanvas');
+const ctx         = canvas.getContext('2d');
+const outputArea  = document.getElementById('outputArea');
+const btnCopy     = document.getElementById('btnCopy');
+const dlLink      = document.getElementById('downloadLink');
+const toast       = document.getElementById('toast');
+const overlay     = document.getElementById('loadingOverlay');
+const loadingText = document.getElementById('loadingText');
+
+// ── Settings ──
+fontSizeEl.addEventListener('input', () => {
+    fontSizeVal.textContent = fontSizeEl.value + 'px';
+    updatePreview();
+});
+textColorEl.addEventListener('input', updatePreview);
+maxWidthEl.addEventListener('change', updatePreview);
+textInput.addEventListener('input', updatePreview);
+
+// ── Parse text into segments ──
+function parseSegments(text) {
+    const segments = [];
+    let last = 0;
+    // Reset regex
+    EMOJI_RE.lastIndex = 0;
+    let m;
+    while ((m = EMOJI_RE.exec(text)) !== null) {
+        if (m.index > last) {
+            segments.push({ type: 'text', value: text.slice(last, m.index) });
+        }
+        segments.push({ type: 'emoji', value: m[0] });
+        last = EMOJI_RE.lastIndex;
+    }
+    if (last < text.length) {
+        segments.push({ type: 'text', value: text.slice(last) });
+    }
+    return segments;
+}
+
+// ── Codepoints → CDN filename ──
+function emojiToUrls(emoji) {
+    const cps = [...emoji].map(c => c.codePointAt(0).toString(16).toLowerCase());
+    const withFE0F = cps.join('-');
+    const withoutFE0F = cps.filter(c => c !== 'fe0f').join('-');
+    // Also try without ZWJ (200d) for some edge cases
+    const withoutZWJ = cps.filter(c => c !== 'fe0f' && c !== '200d').join('-');
+    const urls = new Set();
+    urls.add(CDN_BASE + withoutFE0F + '.png');
+    if (withFE0F !== withoutFE0F) urls.add(CDN_BASE + withFE0F + '.png');
+    if (withoutZWJ !== withoutFE0F) urls.add(CDN_BASE + withoutZWJ + '.png');
+    return [...urls];
+}
+
+// ── Load single image ──
+function loadImg(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+    });
+}
+
+// ── Load emoji image with fallback ──
+async function loadEmojiImage(emoji) {
+    if (imageCache.has(emoji)) return imageCache.get(emoji);
+    const urls = emojiToUrls(emoji);
+    for (const url of urls) {
+        try {
+            const img = await loadImg(url);
+            imageCache.set(emoji, img);
+            return img;
+        } catch { /* try next */ }
+    }
+    imageCache.set(emoji, null);
+    return null;
+}
+
+// ── Live preview ──
+let previewDebounce = null;
+function updatePreview() {
+    clearTimeout(previewDebounce);
+    previewDebounce = setTimeout(_doPreview, 120);
+}
+async function _doPreview() {
+    const text = textInput.value;
+    if (!text.trim()) {
+        preview.innerHTML = '<span class="preview-empty">Your preview will appear here…</span>';
+        return;
+    }
+    const size = parseInt(fontSizeEl.value);
+    const segments = parseSegments(text);
+    let html = '';
+    const loads = [];
+    for (const seg of segments) {
+        if (seg.type === 'text') {
+            // Escape HTML and preserve newlines
+            html += escapeHtml(seg.value).replace(/\n/g, '<br>');
+        } else {
+            const urls = emojiToUrls(seg.value);
+            const id = 'ep_' + Math.random().toString(36).slice(2, 9);
+            html += `<img class="emoji-img" id="${id}" src="${urls[0]}" ` +
+                    `width="${size}" height="${size}" alt="${seg.value}" ` +
+                    `onerror="emojiImgError(this, '${urls[1] || ''}', '${escapeAttr(seg.value)}')" ` +
+                    `style="width:${size}px;height:${size}px;">`;
+        }
+    }
+    preview.innerHTML = html;
+    preview.style.fontSize = size + 'px';
+    preview.style.color = textColorEl.value;
+    preview.style.maxWidth = maxWidthEl.value === '9999' ? 'none' : maxWidthEl.value + 'px';
+}
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(s) {
+    return s.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+}
+// Called on img error in preview
+window.emojiImgError = function(img, fallbackUrl, fallbackChar) {
+    if (fallbackUrl && img.src !== fallbackUrl) {
+        img.src = fallbackUrl;
+    } else {
+        // Replace with the Unicode character
+        const span = document.createElement('span');
+        span.textContent = fallbackChar;
+        img.replaceWith(span);
+    }
+};
+
+// ── Font loading helper ──
+let fontLoaded = false;
+async function ensureFontLoaded() {
+    if (fontLoaded) return;
+    try {
+        // Use FontFace API to explicitly load the font into memory
+        const fontFace = new FontFace(
+            'TikTok Sans',
+            "url('TikTok_Sans/TikTokSans-VariableFont_opsz,slnt,wdth,wght.ttf')"
+        );
+        const loaded = await fontFace.load();
+        document.fonts.add(loaded);
+        await document.fonts.ready;
+        fontLoaded = true;
+    } catch(e) {
+        console.warn('FontFace load failed, falling back:', e);
+    }
+}
+
+// Preload font on page load so it's ready when needed
+ensureFontLoaded();
+
+// ── Generate PNG ──
+const FONT_FAMILY = 'TikTok Sans';
+const FONT_FALLBACK = 'sans-serif';
+
+function getFontString(fontSize) {
+    // Check if TikTok Sans is actually available
+    if (document.fonts.check(`${fontSize}px "${FONT_FAMILY}"`)) {
+        return `${fontSize}px "${FONT_FAMILY}", ${FONT_FALLBACK}`;
+    }
+    return `${fontSize}px ${FONT_FALLBACK}`;
+}
+
+let lastBlob = null;
+async function generatePNG() {
+    const text = textInput.value;
+    if (!text || !text.trim()) {
+        showToast('Please enter some text or emojis', 'error');
+        return;
+    }
+    showLoading(true, 'Loading font…');
+    try {
+        // Ensure font is loaded before canvas operations
+        await ensureFontLoaded();
+
+        showLoading(true, 'Parsing text…');
+        const fontSize = parseInt(fontSizeEl.value);
+        const textColor = textColorEl.value;
+        const maxW = parseInt(maxWidthEl.value);
+        const emojiSize = Math.round(fontSize * 1.15);
+        const lineHeight = Math.round(fontSize * 1.55);
+        const padding = 12;
+        const fontStr = getFontString(fontSize);
+
+        // Parse lines
+        const rawLines = text.split('\n');
+        const allLines = []; // each = array of segments
+
+        // Set up temp canvas for measurement
+        const mCanvas = document.createElement('canvas');
+        const mCtx = mCanvas.getContext('2d');
+        mCtx.font = fontStr;
+
+        // Word-wrap each line
+        for (const rawLine of rawLines) {
+            const segs = parseSegments(rawLine);
+            if (segs.length === 0) { allLines.push([]); continue; }
+            // Tokenize: split text segments by spaces to enable wrapping
+            const tokens = [];
+            for (const seg of segs) {
+                if (seg.type === 'emoji') { tokens.push(seg); }
+                else {
+                    const parts = seg.value.split(/( +)/);
+                    for (const p of parts) {
+                        if (p.length > 0) tokens.push({ type: 'text', value: p });
+                    }
+                }
+            }
+            // Wrap
+            let currentLine = [];
+            let currentWidth = 0;
+            for (const tok of tokens) {
+                const w = tok.type === 'emoji' ? emojiSize : mCtx.measureText(tok.value).width;
+                if (currentWidth + w > maxW && currentLine.length > 0) {
+                    allLines.push(currentLine);
+                    currentLine = [];
+                    currentWidth = 0;
+                    if (tok.type === 'text' && tok.value.trim() === '') continue;
+                }
+                currentLine.push({ ...tok, width: w });
+                currentWidth += w;
+            }
+            allLines.push(currentLine);
+        }
+
+        // Preload emoji images
+        showLoading(true, 'Loading emoji images…');
+        const emojiSet = new Set();
+        for (const line of allLines) {
+            for (const seg of line) {
+                if (seg.type === 'emoji') emojiSet.add(seg.value);
+            }
+        }
+        await Promise.all([...emojiSet].map(e => loadEmojiImage(e)));
+
+        // Calculate canvas dimensions
+        let canvasWidth = 0;
+        for (const line of allLines) {
+            let lw = 0;
+            for (const seg of line) lw += seg.width;
+            if (lw > canvasWidth) canvasWidth = lw;
+        }
+        canvasWidth = Math.max(Math.ceil(canvasWidth + padding * 2), 1);
+        const canvasHeight = Math.max(Math.ceil(allLines.length * lineHeight + padding * 2), 1);
+
+        // Draw on canvas
+        showLoading(true, 'Rendering…');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        // IMPORTANT: Setting canvas.width/height resets ALL context state,
+        // so font, fillStyle, textBaseline must be set AFTER resize.
+        ctx.font = fontStr;
+        ctx.fillStyle = textColor;
+        ctx.textBaseline = 'top';
+
+        for (let i = 0; i < allLines.length; i++) {
+            let x = padding;
+            const y = padding + i * lineHeight;
+            const textY = y + (lineHeight - fontSize) / 2;
+            const emojiY = y + (lineHeight - emojiSize) / 2;
+
+            for (const seg of allLines[i]) {
+                if (seg.type === 'text') {
+                    ctx.fillText(seg.value, x, textY);
+                    x += seg.width;
+                } else {
+                    const img = imageCache.get(seg.value);
+                    if (img) {
+                        ctx.drawImage(img, x, emojiY, emojiSize, emojiSize);
+                    } else {
+                        // Fallback: draw raw unicode character
+                        ctx.fillText(seg.value, x, textY);
+                    }
+                    x += seg.width;
+                }
+            }
+        }
+
+        // Export blob
+        lastBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        dlLink.href = URL.createObjectURL(lastBlob);
+        outputArea.classList.add('visible');
+        btnCopy.disabled = false;
+        showToast('PNG generated!', 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Error generating PNG', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ── Copy PNG ──
+async function copyPNG() {
+    if (!lastBlob) { showToast('Generate a PNG first', 'error'); return; }
+    try {
+        await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': lastBlob })
+        ]);
+        showToast('PNG copied to clipboard!', 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to copy — try the download link', 'error');
+    }
+}
+
+// ── Helpers ──
+function showToast(msg, type) {
+    toast.textContent = msg;
+    toast.className = 'toast ' + type + ' show';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+function showLoading(on, msg) {
+    if (on) {
+        overlay.classList.add('active');
+        if (msg) loadingText.textContent = msg;
+    } else {
+        overlay.classList.remove('active');
+    }
+}
+
+// Init preview on load
+updatePreview();
+</script>
+</body>
+</html>
